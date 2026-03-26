@@ -25,6 +25,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import com.droidspaces.app.util.ContainerInfo
 import com.droidspaces.app.util.ContainerStatus
+import com.droidspaces.app.util.ContainerWorkloadProfile
 import com.droidspaces.app.util.AnimationUtils
 import androidx.compose.ui.platform.LocalContext
 
@@ -219,9 +220,13 @@ fun ContainerCard(
             if (container.enableTermuxX11) options.add(context.getString(R.string.x11_option))
             if (container.selinuxPermissive) options.add(context.getString(R.string.selinux_option))
             if (container.runAtBoot) options.add(context.getString(R.string.run_at_boot_option))
+            if (container.supervisionEnabled) options.add(context.getString(R.string.boot_supervision_option))
             if (container.volatileMode) options.add(context.getString(R.string.volatile_option))
             if (container.forceCgroupv1) options.add(context.getString(R.string.cgroupv1_option))
             if (container.blockNestedNs) options.add(context.getString(R.string.deadlock_shield_option))
+            if (container.workloadProfile == ContainerWorkloadProfile.K3S_NODE) {
+                options.add(context.getString(R.string.k3s_node_option))
+            }
 
             if (options.isNotEmpty()) {
                 Text(
@@ -336,4 +341,3 @@ fun ContainerCard(
         }
     }
 }
-

@@ -131,9 +131,11 @@
     <string name="x11_option">X11</string>
     <string name="selinux_option">SELinux</string>
     <string name="run_at_boot_option">Run at Boot</string>
+    <string name="boot_supervision_option">Supervisor</string>
     <string name="volatile_option">Volatile</string>
     <string name="cgroupv1_option">Cgroup V1</string>
     <string name="deadlock_shield_option">Deadlock Shield</string>
+    <string name="k3s_node_option">K3s Node</string>
 
     <!-- Container Details Screen -->
     <string name="container_info">Container Info</string>
@@ -166,11 +168,18 @@
     <string name="selinux_permissive_description">Set SELinux permissive</string>
     <string name="run_at_boot">Run at Boot</string>
     <string name="run_at_boot_description">Start container on boot</string>
+    <string name="boot_supervision">Boot Supervision</string>
+    <string name="boot_supervision_description">Keep run-at-boot containers alive with health checks, restart backoff, and automatic recovery.</string>
     <string name="force_cgroupv1">Force Cgroup V1</string>
     <string name="force_cgroupv1_description">Force use of legacy Cgroup V1 hierarchy</string>
     <string name="manual_deadlock_shield">Manual Deadlock Shield</string>
     <string name="manual_deadlock_shield_description">Prevents kernel-level VFS deadlocks on legacy kernels (e.g., 4.14.x) by blocking nested namespace creation.
 \n\nWARNING: Enabling this will block Docker, Podman, LXC, and Systemd sandboxing support inside the container.</string>
+    <string name="workload_profile_title">Workload Profile</string>
+    <string name="workload_profile_description">Choose defaults tuned for the workload you want this container to run.</string>
+    <string name="workload_profile_standard">Standard</string>
+    <string name="workload_profile_k3s_node">K3s Node</string>
+    <string name="workload_profile_k3s_hint">Applies host networking, persistent storage, run-at-boot, nested namespaces allowed, Cgroup v2, and boot supervision defaults for a single-node k3s lab.</string>
 
     <!-- Config Categories and Network Mode -->
     <string name="cat_networking">Networking</string>
@@ -438,4 +447,3 @@
     <string name="help_card_message">Tap here to learn how to setup your first Android container !</string>
     <string name="help_card_url">https://github.com/ravindu644/Droidspaces-OSS/blob/main/Documentation/Installation-Android.md</string>
 </resources>
-

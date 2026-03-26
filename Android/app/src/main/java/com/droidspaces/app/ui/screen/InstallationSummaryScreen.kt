@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import com.droidspaces.app.R
 import com.droidspaces.app.util.ContainerInfo
+import com.droidspaces.app.util.ContainerWorkloadProfile
 import com.droidspaces.app.util.Constants
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +89,11 @@ fun InstallationSummaryScreen(
                     SummaryItem("Tarball", tarballName, Icons.Default.Archive)
                     SummaryItem("Container Name", config.name, Icons.Default.Storage)
                     SummaryItem("Hostname", config.hostname, Icons.Default.Computer)
+                    SummaryItem(
+                        "Profile",
+                        if (config.workloadProfile == ContainerWorkloadProfile.K3S_NODE) "K3s Node" else "Standard",
+                        Icons.Default.Dns
+                    )
                     if (config.useSparseImage && config.sparseImageSizeGB != null) {
                         SummaryItem("Storage Type", "Sparse Image (${config.sparseImageSizeGB}GB)", Icons.Default.Storage)
                     } else {
@@ -110,6 +116,7 @@ fun InstallationSummaryScreen(
                     if (config.selinuxPermissive) SummaryItem("SELinux", "Permissive", Icons.Default.Security)
                     if (config.volatileMode) SummaryItem("Volatile Mode", "Enabled", Icons.Default.AutoDelete)
                     if (config.runAtBoot) SummaryItem("Run at Boot", "Enabled", Icons.Default.PowerSettingsNew)
+                    if (config.supervisionEnabled) SummaryItem("Boot Supervision", "Enabled", Icons.Default.Sync)
 
                     fun countEnvVars(content: String?): Int {
                         if (content.isNullOrBlank()) return 0
@@ -195,4 +202,3 @@ private fun SummaryItem(
         }
     }
 }
-

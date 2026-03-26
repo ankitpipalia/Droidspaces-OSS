@@ -11,6 +11,7 @@ import com.droidspaces.app.util.ContainerStatus
 import com.droidspaces.app.util.Constants
 
 import com.droidspaces.app.util.BindMount
+import com.droidspaces.app.util.ContainerWorkloadProfile
 import com.droidspaces.app.util.PortForward
 
 class ContainerInstallationViewModel : ViewModel() {
@@ -74,6 +75,12 @@ class ContainerInstallationViewModel : ViewModel() {
     var blockNestedNs: Boolean by mutableStateOf(false)
         private set
 
+    var workloadProfile: ContainerWorkloadProfile by mutableStateOf(ContainerWorkloadProfile.STANDARD)
+        private set
+
+    var supervisionEnabled: Boolean by mutableStateOf(false)
+        private set
+
     fun setTarball(uri: Uri) {
         tarballUri = uri
     }
@@ -103,7 +110,9 @@ class ContainerInstallationViewModel : ViewModel() {
         upstreamInterfaces: List<String>,
         portForwards: List<PortForward>,
         forceCgroupv1: Boolean,
-        blockNestedNs: Boolean
+        blockNestedNs: Boolean,
+        workloadProfile: ContainerWorkloadProfile,
+        supervisionEnabled: Boolean
     ) {
         this.netMode = netMode
         this.disableIPv6 = disableIPv6
@@ -120,6 +129,8 @@ class ContainerInstallationViewModel : ViewModel() {
         this.portForwards = portForwards
         this.forceCgroupv1 = forceCgroupv1
         this.blockNestedNs = blockNestedNs
+        this.workloadProfile = workloadProfile
+        this.supervisionEnabled = supervisionEnabled
     }
 
     fun buildConfig(): ContainerInfo? {
@@ -151,7 +162,9 @@ class ContainerInstallationViewModel : ViewModel() {
             upstreamInterfaces = upstreamInterfaces,
             portForwards = portForwards,
             forceCgroupv1 = forceCgroupv1,
-            blockNestedNs = blockNestedNs
+            blockNestedNs = blockNestedNs,
+            workloadProfile = workloadProfile,
+            supervisionEnabled = supervisionEnabled
         )
     }
 
@@ -176,6 +189,7 @@ class ContainerInstallationViewModel : ViewModel() {
         portForwards = emptyList()
         forceCgroupv1 = false
         blockNestedNs = false
+        workloadProfile = ContainerWorkloadProfile.STANDARD
+        supervisionEnabled = false
     }
 }
-

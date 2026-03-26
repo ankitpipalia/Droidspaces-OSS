@@ -47,54 +47,14 @@ data class ContainerInfo(
     val portForwards: List<PortForward> = emptyList(),
     val forceCgroupv1: Boolean = false,
     val blockNestedNs: Boolean = false,
-    val staticNatIp: String = ""
+    val staticNatIp: String = "",
+    val workloadProfile: ContainerWorkloadProfile = ContainerWorkloadProfile.STANDARD,
+    val supervisionEnabled: Boolean = false
 ) {
     val isRunning: Boolean
         get() = status == ContainerStatus.RUNNING
 
-    fun toConfigContent(): String = buildString {
-        appendLine("# Droidspaces Container Configuration")
-        appendLine("# Generated automatically")
-        appendLine()
-        appendLine("name=$name")
-        appendLine("hostname=$hostname")
-        appendLine("rootfs_path=$rootfsPath")
-        appendLine("net_mode=$netMode")
-        appendLine("disable_ipv6=${if (disableIPv6) "1" else "0"}")
-        appendLine("enable_android_storage=${if (enableAndroidStorage) "1" else "0"}")
-        appendLine("enable_hw_access=${if (enableHwAccess) "1" else "0"}")
-        appendLine("enable_termux_x11=${if (enableTermuxX11) "1" else "0"}")
-        appendLine("selinux_permissive=${if (selinuxPermissive) "1" else "0"}")
-        appendLine("volatile_mode=${if (volatileMode) "1" else "0"}")
-        if (bindMounts.isNotEmpty()) {
-            appendLine("bind_mounts=${bindMounts.joinToString(",") { "${it.src}:${it.dest}" }}")
-        }
-        if (netMode == "nat" && upstreamInterfaces.isNotEmpty()) {
-            appendLine("upstream_interfaces=${upstreamInterfaces.joinToString(",")}")
-        }
-        if (netMode == "nat" && portForwards.isNotEmpty()) {
-            appendLine("port_forwards=${portForwards.joinToString(",") { 
-                val mapping = if (it.containerPort != null) "${it.hostPort}:${it.containerPort}" else it.hostPort
-                "$mapping/${it.proto}"
-            }}")
-        }
-        if (dnsServers.isNotEmpty()) {
-            appendLine("dns_servers=$dnsServers")
-        }
-        appendLine("run_at_boot=${if (runAtBoot) "1" else "0"}")
-        appendLine("force_cgroupv1=${if (forceCgroupv1) "1" else "0"}")
-        appendLine("block_nested_ns=${if (blockNestedNs) "1" else "0"}")
-        if (netMode == "nat" && staticNatIp.isNotEmpty()) {
-            appendLine("static_nat_ip=$staticNatIp")
-        }
-        appendLine("use_sparse_image=${if (useSparseImage) "1" else "0"}")
-        if (sparseImageSizeGB != null) {
-            appendLine("sparse_image_size_gb=$sparseImageSizeGB")
-        }
-        if (envFileContent != null) {
-            appendLine("env_file=${Constants.CONTAINERS_BASE_PATH}/${ContainerManager.sanitizeContainerName(name)}/.env")
-        }
-    }
+    fun toConfigContent(): String = ContainerConfigCodec.toConfigContent(this)
 }
 
 object ContainerManager {
@@ -203,79 +163,8 @@ object ContainerManager {
             }
 
             val configContent = readResult.out.joinToString("\n")
-            val configMap = mutableMapOf<String, String>()
-
-            // Parse config file (key=value format)
-            configContent.lines().forEach { line ->
-                val trimmed = line.trim()
-                // Skip comments and empty lines
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    return@forEach
-                }
-
-                val parts = trimmed.split("=", limit = 2)
-                if (parts.size == 2) {
-                    configMap[parts[0].trim()] = parts[1].trim()
-                }
-            }
-
-            // Build ContainerInfo from config
-            val containerName = configMap["name"] ?: defaultName
-            val useSparseImage = configMap["use_sparse_image"] == "1"
-            val sparseImageSizeGB = configMap["sparse_image_size_gb"]?.toIntOrNull()
-
-            // Parse bind mounts: src:dest,src2:dest2
-            val bindMounts = configMap["bind_mounts"]?.split(",")?.mapNotNull {
-                val parts = it.split(":", limit = 2)
-                if (parts.size == 2) BindMount(parts[0], parts[1]) else null
-            } ?: emptyList()
-
-            // Parse upstream interfaces
-            val upstreamInterfaces = configMap["upstream_interfaces"]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
-
-            // Parse port forwards: 8080:80/tcp, 9090:90/udp, 1000-2000/tcp (shorthand)
-            val portForwards = configMap["port_forwards"]?.split(",")?.mapNotNull { pfStr ->
-                try {
-                    val parts = pfStr.trim().split("/")
-                    val proto = if (parts.size > 1) parts[1].lowercase() else "tcp"
-                    val portParts = parts[0].split(":")
-                    if (portParts.size == 2) {
-                        PortForward(portParts[0].trim(), portParts[1].trim(), proto)
-                    } else if (portParts.size == 1 && portParts[0].isNotBlank()) {
-                        PortForward(portParts[0].trim(), null, proto)
-                    } else null
-                } catch (e: Exception) { null }
-            } ?: emptyList()
-
-            return ContainerInfo(
-                name = containerName,
-                hostname = configMap["hostname"] ?: containerName,
-                // Use the new rootfs path structure (LXC-style) or sparse image path
-                rootfsPath = configMap["rootfs_path"] ?: if (useSparseImage) {
-                    getSparseImagePath(containerName)
-                } else {
-                    getRootfsPath(containerName)
-                },
-                netMode = configMap["net_mode"] ?: "host",
-                disableIPv6 = configMap["disable_ipv6"] == "1",
-                enableAndroidStorage = configMap["enable_android_storage"] == "1",
-                enableHwAccess = configMap["enable_hw_access"] == "1",
-                enableTermuxX11 = configMap["enable_termux_x11"] == "1",
-                selinuxPermissive = configMap["selinux_permissive"] == "1",
-                volatileMode = configMap["volatile_mode"] == "1",
-                bindMounts = bindMounts,
-                dnsServers = configMap["dns_servers"] ?: "",
-                runAtBoot = configMap["run_at_boot"] == "1",
-                status = ContainerStatus.STOPPED,
-                useSparseImage = useSparseImage,
-                sparseImageSizeGB = sparseImageSizeGB,
-                envFileContent = loadEnvFileContent(containerName),
-                upstreamInterfaces = upstreamInterfaces,
-                portForwards = portForwards,
-                forceCgroupv1 = configMap["force_cgroupv1"] == "1",
-                blockNestedNs = configMap["block_nested_ns"] == "1",
-                staticNatIp = configMap["static_nat_ip"] ?: ""
-            )
+            val parsed = ContainerConfigCodec.parseConfigContent(configContent, defaultName)
+            return parsed.copy(envFileContent = loadEnvFileContent(parsed.name))
         } catch (e: Exception) {
             return null
         }

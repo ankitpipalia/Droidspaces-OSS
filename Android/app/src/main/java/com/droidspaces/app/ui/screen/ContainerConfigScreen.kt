@@ -18,6 +18,8 @@ import com.droidspaces.app.R
 
 import androidx.compose.ui.text.style.TextOverflow
 import com.droidspaces.app.util.BindMount
+import com.droidspaces.app.util.ContainerWorkloadDefaults
+import com.droidspaces.app.util.ContainerWorkloadProfile
 import com.droidspaces.app.util.PortForward
 import com.droidspaces.app.util.ContainerManager
 import kotlinx.coroutines.launch
@@ -56,6 +58,8 @@ fun ContainerConfigScreen(
     initialEnvFileContent: String = "",
     initialUpstreamInterfaces: List<String> = emptyList(),
     initialPortForwards: List<PortForward> = emptyList(),
+    initialWorkloadProfile: ContainerWorkloadProfile = ContainerWorkloadProfile.STANDARD,
+    initialSupervisionEnabled: Boolean = false,
     onNext: (
         netMode: String,
         disableIPv6: Boolean,
@@ -71,7 +75,9 @@ fun ContainerConfigScreen(
         blockNestedNs: Boolean,
         envFileContent: String?,
         upstreamInterfaces: List<String>,
-        portForwards: List<PortForward>
+        portForwards: List<PortForward>,
+        workloadProfile: ContainerWorkloadProfile,
+        supervisionEnabled: Boolean
     ) -> Unit,
     onBack: () -> Unit
 ) {
@@ -90,6 +96,8 @@ fun ContainerConfigScreen(
     var envFileContent by remember { mutableStateOf(initialEnvFileContent) }
     var upstreamInterfaces by remember { mutableStateOf(initialUpstreamInterfaces) }
     var portForwards by remember { mutableStateOf(initialPortForwards) }
+    var workloadProfile by remember { mutableStateOf(initialWorkloadProfile) }
+    var supervisionEnabled by remember { mutableStateOf(initialSupervisionEnabled) }
     val context = LocalContext.current
 
     var availableUpstreams by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -180,7 +188,7 @@ fun ContainerConfigScreen(
             ) {
                 Button(
                     onClick = {
-                        onNext(netMode, disableIPv6, enableAndroidStorage, enableHwAccess, enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, forceCgroupv1, blockNestedNs, if (envFileContent.isBlank()) null else envFileContent, upstreamInterfaces, portForwards)
+                        onNext(netMode, disableIPv6, enableAndroidStorage, enableHwAccess, enableTermuxX11, selinuxPermissive, volatileMode, bindMounts, dnsServers, runAtBoot, forceCgroupv1, blockNestedNs, if (envFileContent.isBlank()) null else envFileContent, upstreamInterfaces, portForwards, workloadProfile, supervisionEnabled)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -209,6 +217,68 @@ fun ContainerConfigScreen(
             )
 
             Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = context.getString(R.string.workload_profile_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            Text(
+                text = context.getString(R.string.workload_profile_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = workloadProfile == ContainerWorkloadProfile.STANDARD,
+                    onClick = {
+                        workloadProfile = ContainerWorkloadProfile.STANDARD
+                    },
+                    label = { Text(context.getString(R.string.workload_profile_standard)) }
+                )
+                FilterChip(
+                    selected = workloadProfile == ContainerWorkloadProfile.K3S_NODE,
+                    onClick = {
+                        workloadProfile = ContainerWorkloadProfile.K3S_NODE
+                        val preset = ContainerWorkloadDefaults.applyPreset(
+                            profile = ContainerWorkloadProfile.K3S_NODE,
+                            netMode = netMode,
+                            volatileMode = volatileMode,
+                            runAtBoot = runAtBoot,
+                            blockNestedNs = blockNestedNs,
+                            forceCgroupv1 = forceCgroupv1,
+                            supervisionEnabled = supervisionEnabled
+                        )
+                        netMode = preset.netMode
+                        volatileMode = preset.volatileMode
+                        runAtBoot = preset.runAtBoot
+                        blockNestedNs = preset.blockNestedNs
+                        forceCgroupv1 = preset.forceCgroupv1
+                        supervisionEnabled = preset.supervisionEnabled
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Dns,
+                            contentDescription = null
+                        )
+                    },
+                    label = { Text(context.getString(R.string.workload_profile_k3s_node)) }
+                )
+            }
+
+            if (workloadProfile == ContainerWorkloadProfile.K3S_NODE) {
+                Text(
+                    text = context.getString(R.string.workload_profile_k3s_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Text(
                 text = context.getString(R.string.cat_networking),
@@ -803,6 +873,14 @@ fun ContainerConfigScreen(
                 description = context.getString(R.string.run_at_boot_description),
                 checked = runAtBoot,
                 onCheckedChange = { runAtBoot = it }
+            )
+
+            ToggleCard(
+                icon = Icons.Default.Sync,
+                title = context.getString(R.string.boot_supervision),
+                description = context.getString(R.string.boot_supervision_description),
+                checked = supervisionEnabled,
+                onCheckedChange = { supervisionEnabled = it }
             )
 
             Text(

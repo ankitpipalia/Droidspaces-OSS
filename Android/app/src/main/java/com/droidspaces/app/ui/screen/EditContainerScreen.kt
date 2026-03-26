@@ -30,6 +30,8 @@ import androidx.compose.foundation.clickable
 import com.droidspaces.app.ui.component.ToggleCard
 import com.droidspaces.app.util.ContainerInfo
 import com.droidspaces.app.util.ContainerManager
+import com.droidspaces.app.util.ContainerWorkloadDefaults
+import com.droidspaces.app.util.ContainerWorkloadProfile
 import com.droidspaces.app.util.SystemInfoManager
 import com.droidspaces.app.util.Constants
 import com.droidspaces.app.ui.viewmodel.ContainerViewModel
@@ -86,6 +88,8 @@ fun EditContainerScreen(
     var forceCgroupv1 by remember { mutableStateOf(container.forceCgroupv1) }
     var blockNestedNs by remember { mutableStateOf(container.blockNestedNs) }
     var staticNatIp by remember { mutableStateOf(container.staticNatIp) }
+    var workloadProfile by remember { mutableStateOf(container.workloadProfile) }
+    var supervisionEnabled by remember { mutableStateOf(container.supervisionEnabled) }
 
     // Track the "saved" baseline values - updated after each successful save
     var savedHostname by remember { mutableStateOf(container.hostname) }
@@ -105,6 +109,8 @@ fun EditContainerScreen(
     var savedForceCgroupv1 by remember { mutableStateOf(container.forceCgroupv1) }
     var savedBlockNestedNs by remember { mutableStateOf(container.blockNestedNs) }
     var savedStaticNatIp by remember { mutableStateOf(container.staticNatIp) }
+    var savedWorkloadProfile by remember { mutableStateOf(container.workloadProfile) }
+    var savedSupervisionEnabled by remember { mutableStateOf(container.supervisionEnabled) }
 
     // Navigation and internal UI states
     var showFilePicker by remember { mutableStateOf(false) }
@@ -140,7 +146,9 @@ fun EditContainerScreen(
             portForwards != savedPortForwards ||
             forceCgroupv1 != savedForceCgroupv1 ||
             blockNestedNs != savedBlockNestedNs ||
-            staticNatIp != savedStaticNatIp
+            staticNatIp != savedStaticNatIp ||
+            workloadProfile != savedWorkloadProfile ||
+            supervisionEnabled != savedSupervisionEnabled
         }
     }
 
@@ -176,7 +184,9 @@ fun EditContainerScreen(
                     portForwards = portForwards,
                     forceCgroupv1 = forceCgroupv1,
                     blockNestedNs = blockNestedNs,
-                    staticNatIp = staticNatIp
+                    staticNatIp = staticNatIp,
+                    workloadProfile = workloadProfile,
+                    supervisionEnabled = supervisionEnabled
                 )
 
                 // Update config file
@@ -204,6 +214,8 @@ fun EditContainerScreen(
                         savedForceCgroupv1 = forceCgroupv1
                         savedBlockNestedNs = blockNestedNs
                         savedStaticNatIp = staticNatIp
+                        savedWorkloadProfile = workloadProfile
+                        savedSupervisionEnabled = supervisionEnabled
 
                         // Refresh container list and SELinux status using ViewModel
                         containerViewModel.refresh()
@@ -428,6 +440,70 @@ fun EditContainerScreen(
                     Icon(Icons.Default.Computer, contentDescription = null)
                 }
             )
+
+            Text(
+                text = context.getString(R.string.workload_profile_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            Text(
+                text = context.getString(R.string.workload_profile_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = workloadProfile == ContainerWorkloadProfile.STANDARD,
+                    onClick = {
+                        clearFocus()
+                        workloadProfile = ContainerWorkloadProfile.STANDARD
+                    },
+                    label = { Text(context.getString(R.string.workload_profile_standard)) }
+                )
+                FilterChip(
+                    selected = workloadProfile == ContainerWorkloadProfile.K3S_NODE,
+                    onClick = {
+                        clearFocus()
+                        workloadProfile = ContainerWorkloadProfile.K3S_NODE
+                        val preset = ContainerWorkloadDefaults.applyPreset(
+                            profile = ContainerWorkloadProfile.K3S_NODE,
+                            netMode = netMode,
+                            volatileMode = volatileMode,
+                            runAtBoot = runAtBoot,
+                            blockNestedNs = blockNestedNs,
+                            forceCgroupv1 = forceCgroupv1,
+                            supervisionEnabled = supervisionEnabled
+                        )
+                        netMode = preset.netMode
+                        volatileMode = preset.volatileMode
+                        runAtBoot = preset.runAtBoot
+                        blockNestedNs = preset.blockNestedNs
+                        forceCgroupv1 = preset.forceCgroupv1
+                        supervisionEnabled = preset.supervisionEnabled
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Dns,
+                            contentDescription = null
+                        )
+                    },
+                    label = { Text(context.getString(R.string.workload_profile_k3s_node)) }
+                )
+            }
+
+            if (workloadProfile == ContainerWorkloadProfile.K3S_NODE) {
+                Text(
+                    text = context.getString(R.string.workload_profile_k3s_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Text(
                 text = context.getString(R.string.cat_networking),
@@ -1156,6 +1232,17 @@ fun EditContainerScreen(
                 onCheckedChange = {
                     clearFocus()
                     runAtBoot = it
+                }
+            )
+
+            ToggleCard(
+                icon = Icons.Default.Sync,
+                title = context.getString(R.string.boot_supervision),
+                description = context.getString(R.string.boot_supervision_description),
+                checked = supervisionEnabled,
+                onCheckedChange = {
+                    clearFocus()
+                    supervisionEnabled = it
                 }
             )
 

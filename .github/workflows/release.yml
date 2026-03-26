@@ -1,0 +1,285 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to create or update (for example: v5.1.0)"
+        required: true
+      release_name:
+        description: "Optional release title override"
+        required: false
+        default: ""
+      prerelease:
+        description: "Mark the GitHub release as a prerelease"
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: "Create the GitHub release as a draft"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  JAVA_VERSION: "17"
+  TOOLCHAIN_BASE_URL: "https://github.com/ravindu644/Droidspaces-OSS/releases/download/compilers"
+
+jobs:
+  metadata:
+    name: Resolve Release Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      release_date: ${{ steps.meta.outputs.release_date }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      draft: ${{ steps.meta.outputs.draft }}
+    steps:
+      - id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+            RELEASE_NAME_INPUT="${{ github.event.inputs.release_name }}"
+            PRERELEASE="${{ github.event.inputs.prerelease }}"
+            DRAFT="${{ github.event.inputs.draft }}"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+            RELEASE_NAME_INPUT=""
+            PRERELEASE="false"
+            DRAFT="false"
+          fi
+
+          if [ -z "${TAG_NAME}" ]; then
+            echo "tag_name is required" >&2
+            exit 1
+          fi
+
+          if [ -z "${RELEASE_NAME_INPUT}" ]; then
+            RELEASE_NAME="Droidspaces ${TAG_NAME}"
+          else
+            RELEASE_NAME="${RELEASE_NAME_INPUT}"
+          fi
+
+          RELEASE_DATE="$(date -u +%Y-%m-%d)"
+
+          {
+            echo "tag_name=${TAG_NAME}"
+            echo "release_name=${RELEASE_NAME}"
+            echo "release_date=${RELEASE_DATE}"
+            echo "prerelease=${PRERELEASE}"
+            echo "draft=${DRAFT}"
+          } >> "${GITHUB_OUTPUT}"
+
+  backend:
+    name: Build Backend Release Assets
+    runs-on: ubuntu-latest
+    needs: metadata
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential wget xz-utils tar
+
+      - name: Restore musl toolchains cache
+        uses: actions/cache@v4
+        with:
+          path: ~/toolchains
+          key: musl-toolchains-v1
+
+      - name: Download musl toolchains
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/toolchains"
+          cd "$HOME/toolchains"
+
+          for archive in \
+            aarch64-linux-musl-cross.tar.gz \
+            arm-linux-musleabihf-cross.tar.gz \
+            i686-linux-musl-cross.tar.gz \
+            x86_64-linux-musl-cross.tar.gz; do
+            dir="${archive%.tar.gz}"
+            if [ ! -d "${dir}" ]; then
+              if [ ! -f "${archive}" ]; then
+                wget -q "${TOOLCHAIN_BASE_URL}/${archive}"
+              fi
+              tar -xzf "${archive}"
+            fi
+          done
+
+      - name: Build all backend binaries
+        run: make all-build
+
+      - name: Package backend assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ needs.metadata.outputs.tag_name }}"
+          mkdir -p release-assets/backend
+
+          for arch in x86_64 aarch64 armhf x86; do
+            tar -czf "release-assets/backend/droidspaces-${TAG}-${arch}-static.tar.gz" \
+              -C output "droidspaces-${arch}"
+          done
+
+          tar -czf "release-assets/backend/droidspaces-${TAG}-multiarch-static.tar.gz" \
+            -C output \
+            droidspaces-x86_64 \
+            droidspaces-aarch64 \
+            droidspaces-armhf \
+            droidspaces-x86
+
+      - name: Upload backend release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-backend-assets
+          path: release-assets/backend/*.tar.gz
+
+      - name: Upload backend binaries for Android build
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-backend-binaries
+          path: output/droidspaces-*
+
+  android:
+    name: Build Android Release Assets
+    runs-on: ubuntu-latest
+    needs:
+      - metadata
+      - backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download backend binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: android-backend-binaries
+          path: Android/app/src/main/assets/binaries/
+
+      - name: Fix binary permissions
+        run: chmod +x Android/app/src/main/assets/binaries/droidspaces-*
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: gradle
+
+      - name: Decode keystore
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+        if: ${{ env.RELEASE_KEYSTORE != '' }}
+        run: echo "${{ env.RELEASE_KEYSTORE }}" | base64 -d > droidspaces.keystore
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x Android/gradlew
+
+      - name: Build release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cd Android
+          ./gradlew assembleRelease \
+            -PKEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -PKEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
+            -PKEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
+
+      - name: Rename APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ needs.metadata.outputs.tag_name }}"
+          NEW_NAME="Droidspaces-universal-${TAG}.apk"
+          mv Android/app/build/outputs/apk/release/app-release.apk \
+            "Android/app/build/outputs/apk/release/${NEW_NAME}"
+          echo "APK=${NEW_NAME}" >> "${GITHUB_ENV}"
+
+      - name: Upload Android release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android-assets
+          path: Android/app/build/outputs/apk/release/*.apk
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - metadata
+      - backend
+      - android
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Upload combined release bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-release-bundle
+          path: release-assets/*
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ needs.metadata.outputs.tag_name }}
+          RELEASE_NAME: ${{ needs.metadata.outputs.release_name }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+          DRAFT: ${{ needs.metadata.outputs.draft }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EXTRA_ARGS=()
+          if [ "${PRERELEASE}" = "true" ]; then
+            EXTRA_ARGS+=(--prerelease)
+          fi
+          if [ "${DRAFT}" = "true" ]; then
+            EXTRA_ARGS+=(--draft)
+          fi
+
+          if gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${TAG_NAME}" release-assets/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+            gh release edit "${TAG_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${RELEASE_NAME}"
+          else
+            gh release create "${TAG_NAME}" release-assets/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${RELEASE_NAME}" \
+              --target "${GITHUB_SHA}" \
+              --generate-notes \
+              "${EXTRA_ARGS[@]}"
+          fi

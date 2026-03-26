@@ -6,11 +6,6 @@ on:
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Tag name for the release (e.g., v4.3.1)'
-        required: false
-        default: 'test'
 
 jobs:
   android:
@@ -59,7 +54,7 @@ jobs:
 
     - name: Rename APK
       run: |
-        TAG="${{ github.event.inputs.tag_name || 'test' }}"
+        TAG="${{ github.ref_name }}"
         DATE=$(date +%Y-%m-%d)
         NEW_NAME="Droidspaces-universal-${TAG}-${DATE}.apk"
         mv Android/app/build/outputs/apk/release/app-release.apk Android/app/build/outputs/apk/release/${NEW_NAME}
@@ -123,55 +118,3 @@ jobs:
       with:
         name: droidspaces-binaries
         path: output/droidspaces-*
-
-  release:
-    name: Create GitHub Release
-    needs: [android, backend]
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '' && github.event.inputs.tag_name != 'test'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
-    - name: Download Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: release-assets
-        merge-multiple: true
-
-    - name: Generate Changelog
-      id: changelog
-      run: |
-        PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-        echo "Previous tag: $PREV_TAG"
-        
-        if [ -z "$PREV_TAG" ]; then
-          CHANGELOG=$(git log --oneline --pretty=format:"* %s (%h)")
-        else
-          CHANGELOG=$(git log ${PREV_TAG}..HEAD --oneline --pretty=format:"* %s (%h)")
-        fi
-        
-        {
-          echo "notes<<EOF"
-          echo "$CHANGELOG"
-          echo "EOF"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.event.inputs.tag_name }}
-        name: Droidspaces ${{ github.event.inputs.tag_name || 'Development Build' }}
-        target_commitish: ${{ github.sha }}
-        body: |
-          ## What's Changed
-          ${{ steps.changelog.outputs.notes }}
-          
-          ---
-          **Automated Release by Droidspaces CI**
-        files: |
-          release-assets/*.apk
-          release-assets/*.tar.gz

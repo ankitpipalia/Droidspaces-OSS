@@ -287,7 +287,7 @@ See: [Modern GKI Kernel Configuration](Documentation/Kernel-Configuration.md#con
 
 Most modern Linux desktop distributions already include all the requirements needed by Droidspaces by default. **No additional configuration is needed.**
 
-Just download the tarball from the [GitHub Releases](https://github.com/ravindu644/Droidspaces-OSS/releases/latest), extract it, and use the binary for your CPU architecture.
+Just download the tarball from this repository's [GitHub Releases](../../releases/latest), extract it, and use the binary for your CPU architecture.
 
 You can verify your system meets all requirements by running:
 
@@ -324,6 +324,7 @@ sudo ./droidspaces check
 | [Feature Deep Dives](Documentation/Features.md) | Detailed explanation of each major feature. |
 | [Cool Things You Can Do](Documentation/Cool-things-you-can-do.md) | Advanced setups like Secure Mobile Server with Tailscale. |
 | [Troubleshooting](Documentation/Troubleshooting.md) | Common issues and their solutions. |
+| [Release Automation](Documentation/Release-Automation.md) | How GitHub Actions builds and publishes release assets from this repo or a fork. |
 | [Uninstallation Guide](Documentation/Uninstallation.md) | How to remove Droidspaces from your system. |
 
 ---
